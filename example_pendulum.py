@@ -9,18 +9,22 @@ from cem import update_params
 from cem import select_elites
 from cem import shift_elites
 
+import tqdm
+
 rng = jax.random.PRNGKey(0)
 
-env = gym.make("Pendulum-v1", g=9.81, render_mode="human")
+env = gym.make("Pendulum-v1", g=9.81, render_mode="rgb_array")
+env = gym.wrappers.RecordVideo(env, video_folder="videos/")
 proto_env = gym.make("Pendulum-v1", g=9.81)
 
-n_horizon = 30
+n_horizon = 50
 
 n_sequences = 20
 n_elites = 10
 n_old_elites = 5
 mean = jnp.zeros((n_horizon, env.action_space.shape[0]))
 std = jnp.ones((n_horizon, env.action_space.shape[0]))
+rng, key = jax.random.split(rng)
 elites = jnp.zeros((n_elites, n_horizon, env.action_space.shape[0]))
 params = CEMParams(mean=mean, std=std, elites=elites)
 
@@ -44,9 +48,10 @@ n_sim_horizon = 100
 n_iters = 10
 
 x = env.reset(seed=0)
+env.start_video_recorder()
 env.render()
 
-for t in range(n_sim_horizon):
+for t in tqdm.trange(n_sim_horizon):
 
     for i in range(n_iters):
         action_sequences = sample(rng, n=n_sequences, params=params)
@@ -81,5 +86,6 @@ for t in range(n_sim_horizon):
     elites = shift_elites(rng, elites, params=params)
     params = update_params(elites, params=params)
 
+env.close_video_recorder()
 env.close()
 proto_env.close()
