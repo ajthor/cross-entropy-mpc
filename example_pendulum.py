@@ -63,12 +63,12 @@ for t in range(n_sim_horizon):
         # Select the top n elites
         elites, elite_scores = select_elites(action_sequences, -scores, n=n_elites)
 
-        # Keep n old elites.
+        # Keep n old elites
         old_elites = params.elites[:n_old_elites]
         elites = jnp.concatenate([elites, old_elites], axis=0)
 
         # Update the parameters
-        params = update_params(elites, params=params, theta=1.0)
+        params = update_params(elites, params=params, theta=0.1)
 
     # Choose the best action
     best_action = elites[0, 0]
