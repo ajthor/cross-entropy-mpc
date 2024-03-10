@@ -1,0 +1,4 @@
+{
+	"image": "ajthor/jax:0.4.25",
+	"postCreateCommand": "pip install -r requirements.txt",
+}
