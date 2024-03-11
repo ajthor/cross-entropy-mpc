@@ -20,11 +20,11 @@ class CEMParams:
     """Elite samples from the previous iteration."""
 
 
-def sample(key, n: int, params: CEMParams):
+def sample(rng, n: int, params: CEMParams):
     """Sample action sequences from the multivariate normal distribution.
 
     args:
-        key: PRNG key
+        rng: PRNG key
         n: Number of sequences to generate.
         params: CEMParams
 
@@ -35,17 +35,14 @@ def sample(key, n: int, params: CEMParams):
 
     shape = params.mean.shape
 
-    samples = (
-        _generate_colored_sample(
-            key,
-            1,
-            (n, shape[1], shape[0]),
-        ).transpose((0, 2, 1))
-        * params.std
-        + params.mean
+    rng, samples = _generate_colored_sample(
+        rng,
+        1,
+        (n, shape[1], shape[0]),
     )
+    samples = samples.transpose((0, 2, 1)) * params.std + params.mean
 
-    return samples
+    return rng, samples
 
 
 def update_params(elites: jnp.ndarray, params: CEMParams, theta: float = 1.0):
@@ -88,7 +85,7 @@ def select_elites(samples: jnp.ndarray, scores: jnp.ndarray, n: int = 10):
     return samples[elite_indices], scores[elite_indices]
 
 
-def shift_elites(key, elites: jnp.ndarray, params: CEMParams):
+def shift_elites(rng, elites: jnp.ndarray, params: CEMParams):
     """Shift the elites to remove the first action and append a new action.
 
     args:
@@ -101,15 +98,12 @@ def shift_elites(key, elites: jnp.ndarray, params: CEMParams):
 
     """
 
-    samples = (
-        _generate_colored_sample(
-            key,
-            1,
-            (elites.shape[0], elites.shape[2], elites.shape[1]),
-        ).transpose((0, 2, 1))
-        * params.std
-        + params.mean
+    rng, samples = _generate_colored_sample(
+        rng,
+        1,
+        (elites.shape[0], elites.shape[2], elites.shape[1]),
     )
+    samples = samples.transpose((0, 2, 1)) * params.std + params.mean
 
     # Append the new actions to the elites
     new_actions = samples[:, -1, :]
@@ -117,7 +111,7 @@ def shift_elites(key, elites: jnp.ndarray, params: CEMParams):
         (elites[:, 1:, :], new_actions[:, None, :]), axis=1
     )
 
-    return shifted_elites
+    return rng, shifted_elites
 
 
 def shift_params(params: CEMParams):

@@ -16,7 +16,7 @@ import jax.numpy as jnp
 
 
 def _generate_colored_sample(
-    key,
+    rng,
     beta: float,
     shape: tuple,
     fmin: float = 0.0,
@@ -24,7 +24,7 @@ def _generate_colored_sample(
     """Generates colored noise.
 
     args:
-        key: PRNG key
+        rng: PRNG key
         beta: Exponent of the power spectrum.
         shape: Shape of the sample. Should be a 3-tuple, (n, N, m), where n is the
             number of samples, N is the number of time steps, and m is the dimension
@@ -61,7 +61,7 @@ def _generate_colored_sample(
 
     # n_samples = n * N * len(f)
 
-    key, key1, key2 = jax.random.split(key, 3)
+    rng, key1, key2 = jax.random.split(rng, 3)
 
     sr = jax.random.normal(key1, shape=(n, m, len(f)))
     sr = sr * s_scale
@@ -82,4 +82,4 @@ def _generate_colored_sample(
 
     y = jnp.fft.irfft(s, n=N, axis=-1) / sigma
 
-    return y
+    return rng, y
