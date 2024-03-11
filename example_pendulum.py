@@ -8,6 +8,7 @@ from cem import sample
 from cem import update_params
 from cem import select_elites
 from cem import shift_elites
+from cem import shift_params
 
 import tqdm
 
@@ -17,11 +18,13 @@ env = gym.make("Pendulum-v1", g=9.81, render_mode="rgb_array")
 env = gym.wrappers.RecordVideo(env, video_folder="videos/")
 proto_env = gym.make("Pendulum-v1", g=9.81)
 
-n_horizon = 50
+n_horizon = 30
 
-n_sequences = 20
-n_elites = 10
-n_old_elites = 5
+n_sequences = 10
+n_elites = 5
+n_old_elites = 3
+decay_factor = 1.0
+
 mean = jnp.zeros((n_horizon, env.action_space.shape[0]))
 std = jnp.ones((n_horizon, env.action_space.shape[0]))
 rng, key = jax.random.split(rng)
@@ -45,7 +48,7 @@ def roll_out(env, x0, action_sequences):
 
 
 n_sim_horizon = 100
-n_iters = 10
+n_iters = 3
 
 x = env.reset(seed=0)
 env.start_video_recorder()
@@ -53,14 +56,34 @@ env.render()
 
 for t in tqdm.trange(n_sim_horizon):
 
+    # Shift the parameters and repeat the last time step.
+    params = shift_params(params)
+    # params.std = 0.1 * jnp.ones_like(params.std)
+
     for i in range(n_iters):
-        action_sequences = sample(rng, n=n_sequences, params=params)
+        _n_sequences = int(max(n_sequences / decay_factor**i, 2 * n_elites))
+
+        action_sequences = sample(rng, n=_n_sequences, params=params)
         action_sequences = action_sequences.clip(
             env.action_space.low, env.action_space.high
         )
 
         # Concatenate with previous elites
-        action_sequences = jnp.concatenate([action_sequences, params.elites], axis=0)
+        if i == 0:
+            shifted_elites = shift_elites(rng, params.elites, params=params)
+            action_sequences = jnp.concatenate(
+                [action_sequences, shifted_elites], axis=0
+            )
+        else:
+            action_sequences = jnp.concatenate(
+                [action_sequences, params.elites], axis=0
+            )
+
+        # If the last iteration, then add mean to the action sequences
+        if i == n_iters - 1:
+            action_sequences = jnp.concatenate(
+                [action_sequences, params.mean[None, :, :]], axis=0
+            )
 
         # Roll out the action sequences and get the scores
         trajectories, scores = roll_out(proto_env, x, action_sequences)
@@ -68,12 +91,12 @@ for t in tqdm.trange(n_sim_horizon):
         # Select the top n elites
         elites, elite_scores = select_elites(action_sequences, -scores, n=n_elites)
 
-        # Keep n old elites
-        old_elites = params.elites[:n_old_elites]
-        elites = jnp.concatenate([elites, old_elites], axis=0)
+        # # Keep n old elites
+        # old_elites = params.elites[:n_old_elites]
+        # elites = jnp.concatenate([elites, old_elites], axis=0)
 
         # Update the parameters
-        params = update_params(elites, params=params, theta=0.1)
+        params = update_params(elites, params=params, theta=0.9)
 
     # Choose the best action
     best_action = elites[0, 0]
@@ -82,9 +105,6 @@ for t in tqdm.trange(n_sim_horizon):
     x, r, *_ = env.step(best_action)
     env.render()
 
-    # Shift the elites
-    elites = shift_elites(rng, elites, params=params)
-    params = update_params(elites, params=params)
 
 env.close_video_recorder()
 env.close()

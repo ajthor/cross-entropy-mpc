@@ -48,7 +48,7 @@ def sample(key, n: int, params: CEMParams):
     return samples
 
 
-def update_params(elites: jnp.ndarray, params: CEMParams, theta: float = 1):
+def update_params(elites: jnp.ndarray, params: CEMParams, theta: float = 1.0):
     """Update the parameters of the CEM.
 
     args:
@@ -62,13 +62,8 @@ def update_params(elites: jnp.ndarray, params: CEMParams, theta: float = 1):
 
     """
 
-    if theta < 1:
-        mean = jnp.mean(elites, axis=0) * theta + params.mean * (1 - theta)
-        std = jnp.std(elites, axis=0) * theta + params.std * (1 - theta)
-
-    else:
-        mean = jnp.mean(elites, axis=0)
-        std = jnp.std(elites, axis=0)
+    mean = jnp.mean(elites, axis=0) * theta + params.mean * (1 - theta)
+    std = jnp.std(elites, axis=0) * theta + params.std * (1 - theta)
 
     return CEMParams(mean=mean, std=std, elites=elites)
 
@@ -123,3 +118,21 @@ def shift_elites(key, elites: jnp.ndarray, params: CEMParams):
     )
 
     return shifted_elites
+
+
+def shift_params(params: CEMParams):
+    """Shift the mean and std of the multivariate normal distribution.
+
+    args:
+        params: CEMParams
+
+    returns:
+        CEMParams
+
+    """
+
+    mean = jnp.concatenate((params.mean[1:], params.mean[-1:]), axis=0)
+    std = jnp.concatenate((params.std[1:], params.std[-1:]), axis=0)
+    std = std.at[-1].set(1.0)
+
+    return CEMParams(mean=mean, std=std, elites=params.elites)
