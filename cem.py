@@ -1,26 +1,25 @@
-import jax
-import jax.numpy as jnp
+import numpy as np
 
-import chex
+from dataclasses import dataclass
 
 from colored_noise import _generate_colored_sample
 
 
-@chex.dataclass
+@dataclass
 class CEMParams:
     """Parameters for the Cross-Entropy Method (CEM)."""
 
-    mean: jnp.ndarray
+    mean: np.ndarray
     """Mean of the multivariate normal distribution."""
 
-    std: jnp.ndarray
+    std: np.ndarray
     """Standard deviation of the multivariate normal distribution."""
 
-    elites: jnp.ndarray
+    elites: np.ndarray
     """Elite samples from the previous iteration."""
 
 
-def sample(rng, n: int, params: CEMParams):
+def sample(n: int, params: CEMParams):
     """Sample action sequences from the multivariate normal distribution.
 
     args:
@@ -35,17 +34,13 @@ def sample(rng, n: int, params: CEMParams):
 
     shape = params.mean.shape
 
-    rng, samples = _generate_colored_sample(
-        rng,
-        1,
-        (n, shape[1], shape[0]),
-    )
+    samples = _generate_colored_sample(1, (n, shape[1], shape[0]))
     samples = samples.transpose((0, 2, 1)) * params.std + params.mean
 
-    return rng, samples
+    return samples
 
 
-def update_params(elites: jnp.ndarray, params: CEMParams, theta: float = 1.0):
+def update_params(elites: np.ndarray, params: CEMParams, theta: float = 1.0):
     """Update the parameters of the CEM.
 
     args:
@@ -59,13 +54,13 @@ def update_params(elites: jnp.ndarray, params: CEMParams, theta: float = 1.0):
 
     """
 
-    mean = jnp.mean(elites, axis=0) * theta + params.mean * (1 - theta)
-    std = jnp.std(elites, axis=0) * theta + params.std * (1 - theta)
+    mean = np.mean(elites, axis=0) * theta + params.mean * (1 - theta)
+    std = np.std(elites, axis=0) * theta + params.std * (1 - theta)
 
     return CEMParams(mean=mean, std=std, elites=elites)
 
 
-def select_elites(samples: jnp.ndarray, scores: jnp.ndarray, n: int = 10):
+def select_elites(samples: np.ndarray, scores: np.ndarray, n: int = 10):
     """Select the top n elites from the samples based on the scores.
 
     args:
@@ -79,17 +74,16 @@ def select_elites(samples: jnp.ndarray, scores: jnp.ndarray, n: int = 10):
     """
 
     # Get the indices of the top n_elites samples
-    # NOTE: jnp.argsort sorts by increasing order, so we select the first n indices.
-    elite_indices = jnp.argsort(scores)[:n]
+    # NOTE: argsort sorts by increasing order, so we select the first n indices.
+    elite_indices = np.argsort(scores)[:n]
 
     return samples[elite_indices], scores[elite_indices]
 
 
-def shift_elites(rng, elites: jnp.ndarray, params: CEMParams):
+def shift_elites(elites: np.ndarray, params: CEMParams):
     """Shift the elites to remove the first action and append a new action.
 
     args:
-        key: PRNG key
         elites: The top n elites samples.
         params: CEMParams
 
@@ -98,20 +92,16 @@ def shift_elites(rng, elites: jnp.ndarray, params: CEMParams):
 
     """
 
-    rng, samples = _generate_colored_sample(
-        rng,
-        1,
-        (elites.shape[0], elites.shape[2], elites.shape[1]),
+    samples = _generate_colored_sample(
+        1, (elites.shape[0], elites.shape[2], elites.shape[1])
     )
     samples = samples.transpose((0, 2, 1)) * params.std + params.mean
 
     # Append the new actions to the elites
     new_actions = samples[:, -1, :]
-    shifted_elites = jnp.concatenate(
-        (elites[:, 1:, :], new_actions[:, None, :]), axis=1
-    )
+    shifted_elites = np.concatenate((elites[:, 1:, :], new_actions[:, None, :]), axis=1)
 
-    return rng, shifted_elites
+    return shifted_elites
 
 
 def shift_params(params: CEMParams):
@@ -125,8 +115,8 @@ def shift_params(params: CEMParams):
 
     """
 
-    mean = jnp.concatenate((params.mean[1:], params.mean[-1:]), axis=0)
-    std = jnp.concatenate((params.std[1:], params.std[-1:]), axis=0)
-    std = std.at[-1].set(1.0)
+    mean = np.concatenate((params.mean[1:], params.mean[-1:]), axis=0)
+    std = np.concatenate((params.std[1:], params.std[-1:]), axis=0)
+    std[-1] = 1.0
 
     return CEMParams(mean=mean, std=std, elites=params.elites)
